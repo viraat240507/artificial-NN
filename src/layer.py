@@ -1,5 +1,5 @@
 import numpy as np
-from .activations import ACTIVATION_FN,DERIVATIVE, sigmoid, sigmoid_derivative
+from activations import ACTIVATION_FN,DERIVATIVE, sigmoid, sigmoid_derivative
 
 class Layer:
     def __init__(self,num_curr,num_prev,activation_fn_name:str):
@@ -27,5 +27,10 @@ class Layer:
 
     def forward(self,A_prev):
         self.Z=np.dot(A_prev,self.W)+self.b
-        self.A=self.activation_fn(self.Z)
+        
+        if not self.activation_fn_name=="softmax":
+            self.A=self.activation_fn(self.Z)
+        else:
+            exp_Z=np.exp(self.Z-np.max(self.Z,axis=1,keepdims=True))
+            self.A=exp_Z/np.sum(exp_Z,axis=1,keepdims=True)
         return self.Z,self.A

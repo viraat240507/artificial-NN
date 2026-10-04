@@ -1,7 +1,7 @@
 import numpy as np
-from .layer import Layer
-from .losses import MSE,BinaryCrossEntropy,CategoricalCrossEntropy
-class NeuralNetworks:
+from layer import Layer
+from losses import MSE,BinaryCrossEntropy,CategoricalCrossEntropy
+class ANN:
     def __init__(self,dimensions:list[int],activation_fn_list:list[str],loss_fn="mse"):
         self.dimensions=dimensions
         self.activation_fn_list=activation_fn_list
@@ -35,10 +35,6 @@ class NeuralNetworks:
             _,A=layer.forward(A_prev)
             A_prev=A
         return A
-
-    def calculate_loss(self,y_pred):
-        loss=np.mean((self.y_actual-y_pred)**2)
-        return loss
 
     def train(self,batch_size,optimizer,epochs=100,learning_rate=0.01):
         m=self.X_input.shape[0]
@@ -79,12 +75,43 @@ class NeuralNetworks:
                     # updating dA to work for the next previous layer
                     dA=dA_prev
 
-                    # updating the weights and biases
-                    curr_layer.W=optimizer.update(curr_layer.W,dW)
-                    curr_layer.b=optimizer.update(curr_layer.b,db)
+                    # update weights and biases
+                    if optimizer:
+                        curr_layer.W=optimizer.update(curr_layer.W,dW,f"W{i}")
+                        curr_layer.b=optimizer.update(curr_layer.b,db,f"b{i}")
+                    else: raise ValueError("No optimizer entered")
 
             self.X_input=X_initial
             y_pred=self.forward_prop()
-            loss=self.calculate_loss(y_pred)
-            loss_history.append(loss)
+            loss=self.loss_fn(self.y_actual,y_pred)
+            # print(f"Loss at epoch {epoch}:{loss}")
+            loss_history.append(float(loss))
         return loss_history
+
+    # backward pass function which implements a single backward pass on this ANN, returns the gradient with respect to the first input X
+    # it does no mini or full batch gradient descent, just does a single backward pass for the given input batch
+    def backward_step(self,y_batch_actual,y_batch_pred,optimizer=None):
+        current_batch_size=self.X_input.shape[0]
+        dA=self.loss_fn.gradient(y_batch_actual,y_batch_pred)
+
+        for i in range(len(self.layers)-1,-1,-1):
+            curr_layer=self.layers[i]
+            A_prev=self.X_input if i==0 else self.layers[i-1].A
+
+            if i==len(self.layers)-1 and curr_layer.activation_fn_name=="softmax":
+                dZ=(y_batch_pred-y_batch_actual)/current_batch_size
+            else:
+                dZ=dA*curr_layer.derivative_fn(curr_layer.Z)
+            dW=np.dot(A_prev.T,dZ)
+            dA_prev=np.dot(dZ,curr_layer.W.T)
+            db=np.sum(dZ,axis=0,keepdims=True)
+            dA=dA_prev
+
+            # update weights and biases
+            if optimizer:
+                curr_layer.W=optimizer.update(curr_layer.W,dW,f"W{i}")
+                curr_layer.b=optimizer.update(curr_layer.b,db,f"b{i}")
+            else: raise ValueError("No Optimizer Entered")
+
+        return dA
+  
